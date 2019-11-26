@@ -261,3 +261,5 @@ def main(plain_text: str, key: str):
 
 
 main(plain_text="123456ABCD132536", key="AABB09182736CCDD")
+
+# http://extranet.cryptomathic.com/descalc/index
