@@ -44,10 +44,11 @@ def xor(a: str, b: str) -> str:
     return ans
 
 
+# 16 rounds of Feistel encryption
 def encrypt(plain_text: str, round_key_binary: list, round_key_hex: list) -> str:
     plain_text = hex2bin(plain_text)  # Hexadecimal to Binary
 
-    # Initial Permutation Table
+    # Initial Permutation Table, IP table, ex. [58] -> [1]
     initial_perm = [
         58, 50, 42, 34, 26, 18, 10, 2,
         60, 52, 44, 36, 28, 20, 12, 4,
@@ -63,12 +64,12 @@ def encrypt(plain_text: str, round_key_binary: list, round_key_hex: list) -> str
     plain_text = permute(plain_text, initial_perm, 64)
     print("After initial permutation: " + bin2hex(plain_text))
 
-    # Splitting
+    # Splitting plain text into two parts, each one has 32 bits
     left = plain_text[:32]
     right = plain_text[32:]
     print("After splitting: L0=" + bin2hex(left) + " R0=" + bin2hex(right))
 
-    # Expansion D-box Table
+    # Expansion Permutation Table
     exp_d = [
         32, 1, 2, 3, 4, 5, 4, 5,
         6, 7, 8, 9, 8, 9, 10, 11,
@@ -78,7 +79,7 @@ def encrypt(plain_text: str, round_key_binary: list, round_key_hex: list) -> str
         28, 29, 28, 29, 30, 31, 32, 1
     ]
 
-    # S-box Table
+    # 8 S-boxes Table
     s_box = [
         [
             [14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7],
@@ -130,8 +131,8 @@ def encrypt(plain_text: str, round_key_binary: list, round_key_hex: list) -> str
         ]
     ]
 
-    # Straight Permutation Table
-    per = [
+    # P-box Permutation Table, FP table, [16] -> [1]
+    p_box = [
         16, 7, 20, 21,
         29, 12, 28, 17,
         1, 15, 23, 26,
@@ -143,13 +144,14 @@ def encrypt(plain_text: str, round_key_binary: list, round_key_hex: list) -> str
     ]
 
     for i in range(16):
-        # Expansion D-box
+        # F-function Part
+        # 1) Expansion Permutation for Right side
         right_expanded = permute(right, exp_d, 48)
 
-        # XOR RoundKey[i] and right_expanded
+        # 2) XOR K[i] and right_expanded
         x = xor(round_key_binary[i], right_expanded)
 
-        # S-boxes
+        # 3) S-box substitution
         op = ""
         for j in range(8):
             row = 2 * int(x[j * 6]) + int(x[j * 6 + 5])
@@ -163,15 +165,17 @@ def encrypt(plain_text: str, round_key_binary: list, round_key_hex: list) -> str
             val = val % 2
             op += str(val)
 
-        # Straight D-box
-        op = permute(op, per, 32)
+        # 4) P-box permutation
+        op = permute(op, p_box, 32)
 
-        # XOR left and op
+        # 5) XOR left and right
         x = xor(op, left)
 
+        # give the result to L(i-1)
         left = x
 
-        # Swapper
+        # swap right side and left side
+        # Ri = L(i-i) & Li = R(i-1)
         if i != 15:
             left, right = right, left
 
@@ -196,13 +200,14 @@ def encrypt(plain_text: str, round_key_binary: list, round_key_hex: list) -> str
     return cipher
 
 
+# Main function, including Key Generation and Encryption
 def main(plain_text: str, key: str):
     # Key Generation
     # Hex to binary
     key = hex2bin(key)
 
     # Parity bit drop table
-    key_p = [
+    key_parity_drop_table = [
         57, 49, 41, 33, 25, 17, 9,
         1, 58, 50, 42, 34, 26, 18,
         10, 2, 59, 51, 43, 35, 27,
@@ -213,10 +218,12 @@ def main(plain_text: str, key: str):
         21, 13, 5, 28, 20, 12, 4
     ]
 
-    # getting 56 bit key from 64 bit using the parity bits
-    key = permute(key, key_p, 56)  # key without parity
+    # getting 56 bit key from 64 bit using the parity bit drop table
+    key = permute(key, key_parity_drop_table, 56)  # key without parity
 
-    # Number of bit shifts
+    # Number of bit shifting
+    # 16 Rounds total
+    # Round #1, 2, 9, 16 are 2bits-shift, others are 1bit-shift
     shift_table = [
         1, 1, 2, 2,
         2, 2, 2, 2,
@@ -224,7 +231,7 @@ def main(plain_text: str, key: str):
         2, 2, 2, 1
     ]
 
-    # Key- Compression Table
+    # Key- Compression Table 56bits to 48bits, permuted choice2
     key_comp = [
         14, 17, 11, 24, 1, 5,
         3, 28, 15, 6, 21, 10,
@@ -236,7 +243,7 @@ def main(plain_text: str, key: str):
         46, 42, 50, 36, 29, 32
     ]
 
-    # Splitting
+    # Splitting the key into two 28bits-parts
     left = key[:28]
     right = key[28:]
 
@@ -250,16 +257,14 @@ def main(plain_text: str, key: str):
         # Combining
         combine = left + right
 
-        # Key Compression
+        # Key Compression, compress 56 bits key into 48 bits key
         round_key = permute(combine, key_comp, 48)
 
+        # Add N-round key into the list in binary format
         round_key_binary.append(round_key)
+        # Add N-round key into the list in hexadecimal format
         round_key_hex.append(bin2hex(round_key))
 
+    # 16 rounds of Feistel encryption goes here, to line 47
     cipher = encrypt(plain_text, round_key_binary, round_key_hex)
     print("Cipher Text: " + cipher)
-
-
-main(plain_text="123456ABCD132536", key="AABB09182736CCDD")
-
-# http://extranet.cryptomathic.com/descalc/index
